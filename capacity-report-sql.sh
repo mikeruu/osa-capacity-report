@@ -15,9 +15,9 @@
 source /root/openrc
 
 #Set the allocation ratios configured in the nova scheduler.
-CPU_ALLOCATION_RATIO=4
+CPU_ALLOCATION_RATIO=3
 DISK_ALLOCATION_RATIO=1
-RAM_ALLOCATION_RATIO=1.5
+RAM_ALLOCATION_RATIO=2
 
 
 #Get the list of compute node names
@@ -47,6 +47,13 @@ function get_capacity_report(){
   #Join computes by commas for mysql query and add quotes to every hostname
   ENABLED_COMPUTES=$(echo $ENABLED_COMPUTES | sed 's/ /,/g' | sed 's/,/\",\"/g' | sed 's/^\|$/"/g')
 
+
+  #Escape the host name in case it has a hyphen for mysql query compatibility
+  TOTAL_COMPUTES_SQL=$(for host in $TOTAL_COMPUTES; do echo $host |  sed 's/-/\\-/'; done)
+  #Join computes by commas for mysql query and add quotes to every hostname
+  TOTAL_COMPUTES_SQL=$(echo $TOTAL_COMPUTES_SQL | sed 's/ /,/g' | sed 's/,/\",\"/g' | sed 's/^\|$/"/g')
+
+
   #Check if any disabled computes exist to avoid running queries on empty strings
   if [[ "$COMPUTE_DOWN" ]]; then
     #Escape the host name in case it has a hyphen for mysql query compatibility
@@ -65,7 +72,7 @@ function get_capacity_report(){
 
 
   #Get total sum of available resources
-  TOTALS=$(lxc-attach -n $(lxc-ls -1 | grep galera | head -n 1) -- mysql -se "select sum(memory_mb), sum(vcpus) , sum(local_gb)from (SELECT * FROM nova.compute_nodes WHERE host is NOT NULL group by host) as t;")
+  TOTALS=$(lxc-attach -n $(lxc-ls -1 | grep galera | head -n 1) -- mysql -se "select sum(memory_mb), sum(vcpus) , sum(local_gb)from (SELECT * FROM nova.compute_nodes WHERE host in (${TOTAL_COMPUTES_SQL}) AND (host is NOT NULL AND deleted_at is NULL) group by host) as t;")
 
   #Assign each to its variable to use in output later
   TOTAL_RAM=$( echo $TOTALS | cut -d " " -f 1)
